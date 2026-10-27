@@ -53,7 +53,7 @@ def _continuous_breeze_text(text):
     """Treat newlines as formatting, not independent voice-generation prompts."""
     import re
     # Keep authored punctuation and word boundaries across Chinese/English lines.
-    return re.sub(r"\\s+", " ", text.strip())
+    return re.sub(r"\s+", " ", text.strip())
 
 def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transcript, emotion, alpha, breeze_mode):
     if not (text or "").strip(): return None, "请输入配音文本。"
