@@ -147,7 +147,7 @@ CSS="""
 .gradio-container button.primary{border-radius:12px!important;font-weight:700!important}
 @media(max-width:700px){#hero{padding:20px}#hero h1{font-size:1.5rem!important}}
 """
-with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(primary_hue="teal",neutral_hue="slate"),css=CSS) as demo:
+with gr.Blocks(title="VoiceHub · Local Voice Studio") as demo:
     gr.Markdown("""<div id="hero"><h1>VoiceHub / Local Voice Studio</h1><p>文字转语音 · 声音克隆 · 情绪表达 · 离线语音识别<br>四模型统一入口，单任务运行，模型推理结束后退出进程。</p></div>""")
     with gr.Tabs():
         with gr.Tab("语音合成 · TTS"):
@@ -216,4 +216,4 @@ with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(prima
 
 VoiceHub 不分发模型权重。各模型的使用范围由各自许可证决定，代码许可证不自动授权商业使用模型或生成音频。请勿在未获许可情况下克隆他人声音。默认仅监听 localhost。""")
 if __name__=="__main__":
-    demo.queue(default_concurrency_limit=1).launch(server_name="127.0.0.1",server_port=int(os.getenv("VOICEHUB_PORT","7860")),share=False)
+    demo.queue(default_concurrency_limit=1).launch(server_name="127.0.0.1",server_port=int(os.getenv("VOICEHUB_PORT","7860")),share=False,theme=gr.themes.Soft(primary_hue="teal",neutral_hue="slate"),css=CSS)
