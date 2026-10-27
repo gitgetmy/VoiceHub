@@ -26,7 +26,7 @@ def invoke(args, cwd=None, timeout=900, env_extra=None):
 def _segment_sort_key(path):
     """Sort numbered generator outputs in narration order, not by filesystem mtime."""
     import re
-    match = re.search(r"(\\d+)$", path.stem)
+    match = re.search(r"(\d+)$", path.stem)
     return (int(match.group(1)) if match else -1, path.name)
 
 def _merge_wav_segments(paths, dest):
