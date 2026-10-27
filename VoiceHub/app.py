@@ -186,7 +186,7 @@ with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(prima
                         gr.Markdown("### 03 / 生成与试听")
                         go=gr.Button("生成语音",variant="primary")
                         player=gr.Audio(type="filepath",label="试听与下载 WAV")
-                        status=gr.Textbox(label="状态 / 日志",lines=6,show_copy_button=True)
+                        status=gr.Textbox(label="状态 / 日志",lines=6,buttons=['copy'])
             sample.change(example,sample,[text,guide],queue=False)
             breeze_mode.change(breeze_layout,breeze_mode,[b_clone,b_direction],queue=False)
             auto.click(auto_reference,[b_audio,ref_engine],[reftext,refstatus],concurrency_limit=1)
@@ -203,7 +203,7 @@ with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(prima
                 with gr.Column(scale=6):
                     with gr.Group(elem_id="panel"):
                         gr.Markdown("### 02 / 识别文本")
-                        transcript=gr.Textbox(lines=10,label="转写结果",show_copy_button=True)
+                        transcript=gr.Textbox(lines=10,label="转写结果",buttons=['copy'])
                         log=gr.Textbox(lines=4,label="日志")
             recognize.click(transcribe,[asr_model,audio],[transcript,log],concurrency_limit=1)
             gr.Markdown("目前仅支持整段离线转写，Confucius 的实时流式协议暂未集成。")
