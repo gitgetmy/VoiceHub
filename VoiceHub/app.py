@@ -23,6 +23,32 @@ def invoke(args, cwd=None, timeout=900, env_extra=None):
         raise RuntimeError(log[-3500:] or f"Process exited {p.returncode}")
     return log[-1500:]
 
+def _segment_sort_key(path):
+    """Sort numbered generator outputs in narration order, not by filesystem mtime."""
+    import re
+    match = re.search(r"(\\d+)$", path.stem)
+    return (int(match.group(1)) if match else -1, path.name)
+
+def _merge_wav_segments(paths, dest):
+    """Join sequential WAV pieces and preserve original sample rate and channels."""
+    import numpy as np
+    import soundfile as sf
+    blocks = []
+    expected_rate = None
+    expected_channels = None
+    for p in paths:
+        audio, rate = sf.read(str(p), dtype="float32", always_2d=True)
+        if expected_rate is None:
+            expected_rate, expected_channels = rate, audio.shape[1]
+        if rate != expected_rate or audio.shape[1] != expected_channels:
+            raise ValueError("音频片段采样率或声道数不一致，无法安全拼接。")
+        if audio.size:
+            blocks.append(audio)
+    if not blocks:
+        raise ValueError("生成的音频片段为空。")
+    merged = np.concatenate(blocks, axis=0)
+    sf.write(str(dest), merged, expected_rate, subtype="PCM_16")
+
 def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transcript, emotion, alpha, breeze_mode):
     if not (text or "").strip(): return None, "请输入配音文本。"
     if not LOCK.acquire(blocking=False): return None, "有其他推理任务正在执行。"
@@ -46,9 +72,15 @@ def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transc
                 args += ["--ref_audio",Path(breeze_audio).resolve(),
                          "--ref_text",transcript,"--voice","S0"]
             log = invoke(args,cwd=ROOT)
-            matches = sorted(OUT.glob(wav.stem+"*.wav"),key=lambda f:f.stat().st_mtime,reverse=True)
-            if not matches: return None,"生成结束，但没有找到 WAV。\n"+log
-            return str(matches[0]),"完成。\n"+log[-500:]
+            # MLX-Audio may emit one WAV per input line / generation segment.
+            # Never return only the newest (last) segment.
+            matches = sorted(OUT.glob(wav.stem+"*.wav"), key=_segment_sort_key)
+            if not matches: return None, "生成结束，但没有找到 WAV。\n"+log
+            if len(matches) == 1:
+                return str(matches[0]), "完成（1 段）。\n"+log[-500:]
+            joined = OUT / (wav.stem + "_merged.wav")
+            _merge_wav_segments(matches, joined)
+            return str(joined), f"已按顺序合并 {len(matches)} 段音频。\n"+log[-500:]
         if engine == "IndexTTS 2.5 · FP16":
             if not INDEX_CLI.exists(): return None,"IndexTTS 推理环境未安装，请查看 README。"
             if not INDEX_MODEL.exists(): return None,f"IndexTTS 模型未找到：{INDEX_MODEL}"
