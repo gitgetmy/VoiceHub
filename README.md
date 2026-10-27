@@ -2,7 +2,7 @@
 
 A local Gradio dashboard for four speech models on Apple Silicon. Chinese-first UI, generic demo scripts, voice cloning, emotion settings, offline transcription, and one active inference subprocess at a time.
 
-> **Status**: public release candidate. Existing Breeze and IndexTTS CLI inference paths have been user-tested on a Mac mini, and Confucius4 has been user-tested in VoiceHub. This new UI and all model combinations have **not** been end-to-end tested on another machine. Qwen3-ASR requires its downloaded `config.json` and weights.
+> **Status**: v0.1.0 Beta — all four engines and the core Gradio workflow have been tested successfully on one Apple Silicon Mac mini, including multiline Breeze synthesis and voice consistency after text normalization. Compatibility on other Mac configurations has not yet been independently validated.
 
 ## Supported engines
 
@@ -92,7 +92,7 @@ Open <http://127.0.0.1:7860>. Set another port using `VOICEHUB_PORT=7861 python 
 2. Choose **IndexTTS 2.5**, upload authorized clean speech, select **calm**, generate WAV.
 3. Switch to **ASR**, transcribe a short clip with **Confucius4**.
 4. Switch to **Qwen3-ASR**, transcribe the same clip; check `models/Qwen3-ASR-1.7B-bf16/config.json` if missing.
-5. Confirm only one inference job starts at a time.
+5. Test Breeze multiline Chinese/English, voice design and reference-assisted cloning.\n6. Confirm only one inference job starts at a time.
 
 ## Privacy, security and licenses
 
