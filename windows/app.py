@@ -79,7 +79,7 @@ def breeze_generate(text, mode, instruction, cfg, reference, ref_text):
         LOCK.release()
 
 INDEX_CLI = WIN / "engines" / "index-tts" / ".venv" / "Scripts" / "indextts2.exe"
-INDEX_MODEL = os.environ.get("VOICEHUB_INDEX_MODEL", str(WIN / "models" / "IndexTTS-2"))
+INDEX_MODEL = os.environ.get("VOICEHUB_INDEX_MODEL", str(WIN / "engines" / "index-tts" / "checkpoints"))
 
 def gpu_status():
     exe = shutil.which("nvidia-smi")
@@ -94,7 +94,7 @@ def gpu_status():
 
 def index_synthesize(text, reference, emotion, strength):
     if not text.strip() or not reference: return None, "请输入文本并上传授权参考录音。"
-    if not INDEX_CLI.exists(): return None, "请先安装 IndexTTS 2 独立 CLI，详见 README。"
+    if not INDEX_CLI.exists(): return None, "IndexTTS CLI 未找到，请参阅 Windows README。\n注意：2.5 权重与 2.0 CLI 的兼容性尚未确认。"
     if not LOCK.acquire(blocking=False): return None, "当前有推理任务正在执行。"
     try:
         try:
@@ -157,7 +157,7 @@ def system_status():
         f"Python: {sys.version.split()[0]}\n"
         f"Breeze GGUF 本地服务: {breeze}\n"
         f"Qwen3-ASR 独立环境: {'已安装' if QWEN_PYTHON.is_file() else '未安装'}\n"
-        "IndexTTS 2.5 / Confucius4: 待接入独立 Windows 适配器\n"
+        "IndexTTS 2.5: 试验性 CLI 适配，未确认 2.5 权重兼容性\nConfucius4: 尚未接入\n"
         "同一时刻只允许一项推理任务"
     )
 
@@ -167,9 +167,9 @@ STYLE = """
        padding:24px; margin-bottom:18px}
 #hero * {color:white!important}
 """
-with gr.Blocks(title="VoiceHub Windows Preview") as app:
+with gr.Blocks(title="VoiceHub Windows v0.2.0 Alpha") as app:
     gr.Markdown("""<div id="hero"><h1>VoiceHub · Windows Preview</h1>
-    <p>本地配音与语音识别 · Windows / CUDA / Vulkan · Beta 开发版</p></div>""")
+    <p>本地配音与语音识别 · Windows / CUDA / Vulkan · Alpha · 未完成模型实机验证</p></div>""")
     with gr.Tabs():
         with gr.Tab("Breeze TTS 2 · 本地合成"):
             with gr.Row():
