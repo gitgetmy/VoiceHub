@@ -1,6 +1,6 @@
-# VoiceHub Windows preview (v0.2.0 development)
+# VoiceHub Windows v0.2.0 Alpha (untested inference preview)
 
-This **experimental Windows backend** is isolated from the existing, working Apple Silicon / MLX release. It is **not** yet a full four-engine Windows implementation.
+**Release warning:** The Gradio UI has launched successfully on one Windows RTX 3060 12GB computer. **No Windows speech inference has been verified**. IndexTTS 2.5 CUDA dependencies loaded and `torch.cuda.is_available()` returned `True`, but model weights were still downloading. The IndexTTS adapter may require API changes for 2.5 compatibility. This is source-only alpha, not a ready-to-use four-model release.\n\nThis **experimental Windows backend** is isolated from the existing, working Apple Silicon / MLX release. It is **not** yet a full four-engine Windows implementation.
 
 ## Current scope
 
@@ -11,7 +11,7 @@ This **experimental Windows backend** is isolated from the existing, working App
 | IndexTTS 2.5 | Official Windows PyTorch CLI (`indextts2 synth`) | Experimental adapter committed; **Windows testing pending** |
 | Confucius4-R2T2 | Official streaming/vLLM runtime | **Not integrated yet** |
 
-This preview never claims to have four working Windows models. The two unfinished models appear in a clearly labelled information tab without nonfunctional Generate buttons.
+This preview does not claim working inference for any engine yet. Confucius4 is not integrated. IndexTTS provides an experimental button whose CLI and model version compatibility require validation.
 
 ## Prerequisites
 
