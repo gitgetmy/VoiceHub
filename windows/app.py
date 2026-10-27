@@ -78,7 +78,7 @@ def breeze_generate(text, mode, instruction, cfg, reference, ref_text):
     finally:
         LOCK.release()
 
-INDEX_CLI = WIN / ".venv-index" / "Scripts" / "indextts2.exe"
+INDEX_CLI = WIN / "engines" / "index-tts" / ".venv" / "Scripts" / "indextts2.exe"
 INDEX_MODEL = os.environ.get("VOICEHUB_INDEX_MODEL", str(WIN / "models" / "IndexTTS-2"))
 
 def gpu_status():
