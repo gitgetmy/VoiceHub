@@ -15,15 +15,15 @@ INDEX_ROOT = HERE / "engines/mlx-indextts2"
 INDEX_CLI = INDEX_ROOT / ".venv/bin/mlx-indextts"
 INDEX_MODEL = ROOT / "models/IndexTTS-2.5-fp16"
 
-def invoke(args, cwd=None, timeout=900):
+def invoke(args, cwd=None, timeout=900, env_extra=None):
     p = subprocess.run([str(x) for x in args], cwd=cwd, timeout=timeout,
-        text=True, capture_output=True, env={**os.environ, "PYTHONUNBUFFERED":"1"})
+        text=True, capture_output=True, env={**os.environ, "PYTHONUNBUFFERED":"1", **(env_extra or {})})
     log = (p.stdout + "\n" + p.stderr).strip()
     if p.returncode:
         raise RuntimeError(log[-3500:] or f"Process exited {p.returncode}")
     return log[-1500:]
 
-def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transcript, emotion, alpha):
+def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transcript, emotion, alpha, breeze_mode):
     if not (text or "").strip(): return None, "请输入配音文本。"
     if not LOCK.acquire(blocking=False): return None, "有其他推理任务正在执行。"
     try:
@@ -33,10 +33,18 @@ def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transc
             args = [MLX_PY,"-m","mlx_audio.tts.generate","--model",BREEZE,
                     "--text",text,"--output_path",OUT,"--file_prefix",wav.stem,
                     "--cfg_scale",str(cfg)]
-            if instruction.strip(): args += ["--instruct",instruction]
-            if breeze_audio:
-                if not (transcript or "").strip(): return None, "声音克隆需要参考音频的准确逐字稿。"
-                args += ["--ref_audio",Path(breeze_audio).resolve(),"--ref_text",transcript,"--voice","S0"]
+            cloning = breeze_mode != "声音设计"
+            if cloning and not breeze_audio:
+                return None, "当前模式需要上传有权使用的参考音频。"
+            if cloning and not (transcript or "").strip():
+                return None, "请先点击自动识别，核对并填写参考音频文本。"
+            if breeze_mode == "声音设计" and not (instruction or "").strip():
+                return None, "声音设计模式请填写声音描述。"
+            if instruction.strip() and breeze_mode != "声音克隆":
+                args += ["--instruct",instruction]
+            if cloning:
+                args += ["--ref_audio",Path(breeze_audio).resolve(),
+                         "--ref_text",transcript,"--voice","S0"]
             log = invoke(args,cwd=ROOT)
             matches = sorted(OUT.glob(wav.stem+"*.wav"),key=lambda f:f.stat().st_mtime,reverse=True)
             if not matches: return None,"生成结束，但没有找到 WAV。\n"+log
@@ -49,7 +57,8 @@ def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transc
                     "--language","zh","--ref-audio",Path(index_audio).resolve(),
                     "--text",text,"--output",wav,"--emotion",emotion,
                     "--emo-alpha",str(alpha),"--no-denoise-ref"]
-            log = invoke(args,cwd=INDEX_ROOT)
+            # Reuse locally cached W2V-BERT / CAMPPlus; never require online access during inference.
+            log = invoke(args,cwd=INDEX_ROOT,env_extra={"HF_HUB_OFFLINE": "1"})
             return (str(wav) if wav.is_file() else None),("完成。\n" if wav.is_file() else "未生成 WAV。\n")+log[-500:]
         return None,"未识别的模型。"
     except subprocess.TimeoutExpired: return None,"任务超过 15 分钟。"
@@ -81,8 +90,21 @@ def example(k): return SAMPLES[k]
 def mode(value):
     breeze=value.startswith("Breeze")
     return gr.update(visible=breeze),gr.update(visible=not breeze),gr.update(value=None),gr.update(value="")
-def dispatch(engine,text,guide,cfg,b_ref,i_ref,reftext,emotion,alpha):
-    return synthesize(engine,text,guide,cfg,b_ref,i_ref,reftext,emotion,alpha)
+def dispatch(engine,text,guide,cfg,b_ref,i_ref,reftext,emotion,alpha,breeze_mode):
+    return synthesize(engine,text,guide,cfg,b_ref,i_ref,reftext,emotion,alpha,breeze_mode)
+
+def breeze_layout(choice):
+    clone = choice != "声音设计"
+    direction = choice != "声音克隆"
+    return gr.update(visible=clone), gr.update(visible=direction)
+
+def auto_reference(audio, engine):
+    if not audio:
+        return gr.update(), "请先上传参考录音。"
+    words, detail = transcribe(engine, audio)
+    if words.startswith(("识别失败", "识别超时", "识别结果格式异常", "另一个任务")):
+        return gr.update(), words + ("\n" + detail if detail else "")
+    return words, "自动识别完成。请核对文字是否与参考录音完全一致，再开始克隆。"
 
 CSS="""
 .gradio-container{max-width:1250px!important;margin:auto!important;padding:18px!important}
@@ -103,13 +125,24 @@ with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(prima
                         gr.Markdown("### 01 / 台词与模型")
                         model=gr.Dropdown(["Breeze TTS 2 · BF16","IndexTTS 2.5 · FP16"],value="Breeze TTS 2 · BF16",label="选择引擎")
                         sample=gr.Dropdown(list(SAMPLES),value="日常问候",label="通用示例")
-                        text=gr.Textbox(label="配音台词",lines=6,value=SAMPLES["日常问候"][0])
+                        text=gr.Textbox(label="合成文本（中文 / English）",lines=6,value=SAMPLES["日常问候"][0])
                     with gr.Group(visible=True,elem_id="panel") as bgroup:
-                        gr.Markdown("### 02 / Breeze 声音设计")
-                        guide=gr.Textbox(label="声音描述 / 表演指导",lines=3,value=SAMPLES["日常问候"][1])
+                        gr.Markdown("### 02 / Breeze 声音设置")
+                        breeze_mode=gr.Radio(["声音设计","声音克隆","声音克隆 + 情绪指导"],
+                            value="声音设计",label="工作模式")
+                        with gr.Group(visible=True) as b_direction:
+                            guide=gr.Textbox(label="声音描述 / 表演指导",lines=3,value=SAMPLES["日常问候"][1])
                         cfg=gr.Slider(1,8,value=4,step=.5,label="CFG 引导强度")
-                        b_audio=gr.Audio(type="filepath",sources=["upload","microphone"],label="声音克隆参考音频（可选）")
-                        reftext=gr.Textbox(label="参考音频逐字稿（克隆时必填）")
+                        with gr.Group(visible=False) as b_clone:
+                            b_audio=gr.Audio(type="filepath",sources=["upload","microphone"],label="参考声音（需获得授权）")
+                            with gr.Row():
+                                ref_engine=gr.Dropdown(["Confucius4-R2T2","Qwen3-ASR 1.7B"],
+                                    value="Confucius4-R2T2",label="识别参考音频的模型")
+                                auto=gr.Button("自动识别参考文本",variant="secondary")
+                            reftext=gr.Textbox(label="参考音频文本（自动识别后请人工校对）",
+                                lines=3,placeholder="参考录音里实际说出的内容，与新合成文本不同。")
+                            refstatus=gr.Textbox(label="自动识别状态",interactive=False,lines=2)
+                        gr.Markdown("支持中文和英文。克隆模式的参考文本用于匹配录音内容，不会被当作新台词。")
                     with gr.Group(visible=False,elem_id="panel") as igroup:
                         gr.Markdown("### 02 / IndexTTS 角色克隆")
                         i_audio=gr.Audio(type="filepath",sources=["upload","microphone"],label="参考音频（必填）")
@@ -123,8 +156,10 @@ with gr.Blocks(title="VoiceHub · Local Voice Studio",theme=gr.themes.Soft(prima
                         player=gr.Audio(type="filepath",label="试听与下载 WAV")
                         status=gr.Textbox(label="状态 / 日志",lines=6,show_copy_button=True)
             sample.change(example,sample,[text,guide],queue=False)
+            breeze_mode.change(breeze_layout,breeze_mode,[b_clone,b_direction],queue=False)
+            auto.click(auto_reference,[b_audio,ref_engine],[reftext,refstatus],concurrency_limit=1)
             model.change(mode,model,[bgroup,igroup,player,status],queue=False)
-            go.click(dispatch,[model,text,guide,cfg,b_audio,i_audio,reftext,emotion,alpha],[player,status],concurrency_limit=1)
+            go.click(dispatch,[model,text,guide,cfg,b_audio,i_audio,reftext,emotion,alpha,breeze_mode],[player,status],concurrency_limit=1)
         with gr.Tab("语音识别 · ASR"):
             with gr.Row():
                 with gr.Column(scale=6):
