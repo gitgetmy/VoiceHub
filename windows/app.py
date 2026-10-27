@@ -78,6 +78,45 @@ def breeze_generate(text, mode, instruction, cfg, reference, ref_text):
     finally:
         LOCK.release()
 
+INDEX_CLI = WIN / ".venv-index" / "Scripts" / "indextts2.exe"
+INDEX_MODEL = os.environ.get("VOICEHUB_INDEX_MODEL", str(WIN / "models" / "IndexTTS-2"))
+
+def gpu_status():
+    exe = shutil.which("nvidia-smi")
+    if not exe: return "未找到 nvidia-smi", None
+    try:
+        p = subprocess.run([exe, "--query-gpu=name,memory.free", "--format=csv,noheader,nounits"],
+                           capture_output=True, text=True, timeout=8)
+        name, free = [v.strip() for v in p.stdout.splitlines()[0].split(",")]
+        return f"{name}，空闲 {free} MiB", int(free)
+    except Exception as exc:
+        return str(exc), None
+
+def index_synthesize(text, reference, emotion, strength):
+    if not text.strip() or not reference: return None, "请输入文本并上传授权参考录音。"
+    if not INDEX_CLI.exists(): return None, "请先安装 IndexTTS 2 独立 CLI，详见 README。"
+    if not LOCK.acquire(blocking=False): return None, "当前有推理任务正在执行。"
+    try:
+        try:
+            check_breeze()
+            return None, "Breeze Vulkan 服务还在运行，请停止 breeze-server，释放显存。"
+        except RuntimeError:
+            pass
+        status, free = gpu_status()
+        if free is not None and free < 5000:
+            return None, f"建议先释放至少 5GB 显存。目前：{status}"
+        dest = OUTPUT / f"index_{uuid.uuid4().hex[:12]}.wav"
+        cmd = [str(INDEX_CLI), "synth", "--text", text, "--voice", str(Path(reference).resolve()),
+               "--output", str(dest), "--model-dir", INDEX_MODEL, "--device", "cuda:0", "--fp16"]
+        if emotion != "neutral":
+            cmd += ["--emotion-text", emotion, "--emotion-weight", str(strength)]
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=900, env={**os.environ, "PYTHONIOENCODING":"utf-8"})
+        if p.returncode: return None, "推理失败：\n" + (p.stderr or p.stdout)[-1800:]
+        return (str(dest) if dest.is_file() else None), ("生成成功" if dest.is_file() else "未生成 WAV")
+    except Exception as exc: return None, f"IndexTTS 出错：{exc}"
+    finally: LOCK.release()
+
 def qwen_transcribe(audio):
     if not audio:
         return "", "请上传音频。"
@@ -86,6 +125,11 @@ def qwen_transcribe(audio):
     if not LOCK.acquire(blocking=False):
         return "", "其他推理任务正在执行。"
     try:
+        try:
+            check_breeze()
+            return "", "请先停止 Breeze 服务后使用 Qwen3-ASR。"
+        except RuntimeError:
+            pass
         p = subprocess.run(
             [str(QWEN_PYTHON), str(WIN / "qwen_worker.py"), str(Path(audio).resolve()), QWEN_MODEL],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900,
@@ -150,13 +194,20 @@ with gr.Blocks(title="VoiceHub Windows Preview") as app:
             words = gr.Textbox(label="转写结果",lines=8)
             qlog = gr.Textbox(label="状态")
             transcribe.click(qwen_transcribe,[audio],[words,qlog],concurrency_limit=1)
-        with gr.Tab("IndexTTS / Confucius4"):
-            gr.Markdown("""### 适配开发中
-            IndexTTS 2.5 的 Windows PyTorch 推理与 Confucius4-R2T2 的流式服务，
-            尚未通过 VoiceHub 的 Windows 适配测试，因此本预览版不提供可能误导的无效生成按钮。
-
-            你可以先单独部署官方 IndexTTS WebUI 和 Confucius4 的官方服务。
-            后续将以**独立子进程和独立依赖环境**接入统一入口。""")
+        with gr.Tab("IndexTTS 2.5 · CUDA 实验版"):
+            gr.Markdown("先停止 Breeze 服务再使用 IndexTTS；此适配器尚待 Windows 实机测试。")
+            idx_text=gr.Textbox(label="合成文本",lines=4,value="您好，欢迎使用 VoiceHub。")
+            idx_reference=gr.Audio(type="filepath",sources=["upload"],label="参考声音")
+            idx_emotion=gr.Dropdown(["neutral","happy","sad","angry","afraid","calm"],
+                                    value="neutral",label="情绪")
+            idx_strength=gr.Slider(0,1,value=.6,step=.05,label="情绪强度")
+            idx_go=gr.Button("生成 IndexTTS 语音",variant="primary")
+            idx_output=gr.Audio(type="filepath",label="试听 WAV")
+            idx_log=gr.Textbox(label="日志")
+            idx_go.click(index_synthesize,[idx_text,idx_reference,idx_emotion,idx_strength],
+                         [idx_output,idx_log],concurrency_limit=1)
+        with gr.Tab("Confucius4 · 开发中"):
+            gr.Markdown("Windows 流式识别仍需独立适配和 GPU 实测。")
         with gr.Tab("环境诊断"):
             diag = gr.Textbox(value=system_status(), label="运行状态", lines=8)
             refresh = gr.Button("刷新状态")
