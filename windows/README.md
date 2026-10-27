@@ -8,7 +8,7 @@ This **experimental Windows backend** is isolated from the existing, working App
 |---|---|---|
 | Breeze TTS 2 | HoppouAI Breeze-TTS-2.cpp Windows Vulkan HTTP server | Adapter written, **Windows testing pending** |
 | Qwen3-ASR 1.7B | Qwen official `qwen-asr` PyTorch package (CUDA or CPU) | Adapter written, **Windows testing pending** |
-| IndexTTS 2.5 | Official Windows PyTorch implementation | **Not integrated yet** |
+| IndexTTS 2.5 | Official Windows PyTorch CLI (`indextts2 synth`) | Experimental adapter committed; **Windows testing pending** |
 | Confucius4-R2T2 | Official streaming/vLLM runtime | **Not integrated yet** |
 
 This preview never claims to have four working Windows models. The two unfinished models appear in a clearly labelled information tab without nonfunctional Generate buttons.
@@ -65,9 +65,34 @@ The CUDA wheel index above is an **example** and must match the user's CUDA-capa
 
 The worker process exits after transcription, releasing model resources. The UI executes one model job at a time. Qwen initial download requires network access and sufficient disk space.
 
+## 4. IndexTTS 2.5 on RTX 3060 12GB (experimental)
+
+Use the official [IndexTTS2 CLI guide](https://github.com/index-tts/index-tts/blob/main/docs/cli_v2_usage.md). Install the official Windows-compatible project independently under `windows/.venv-index` and make sure `windows/.venv-index/Scripts/indextts2.exe` exists.
+
+A Windows source installation (consult upstream instructions for build dependencies):
+
+```powershell
+git clone https://github.com/index-tts/index-tts.git windows/engines/index-tts
+cd windows/engines/index-tts
+uv sync --python 3.11
+cd ../../..
+```
+
+The location of `indextts2.exe` depends on where the environment is installed. If `uv sync` creates `windows/engines/index-tts/.venv`, the VoiceHub preview currently expects you to install/copy the executable environment to `windows/.venv-index` or adjust the path constant `INDEX_CLI` in `windows/app.py`. Do not copy only the CLI executable without its dependencies.
+
+Download required **official PyTorch** IndexTTS2 model resources, not the MLX weights, including `config.yaml`, `gpt.pth`, `s2mel.pth`, and auxiliary files. Set `VOICEHUB_INDEX_MODEL` to that model-resource directory. Upstream CLI includes `indextts2 init`, `download`, and `check`.
+
+Before first VoiceHub launch, validate the CLI itself:
+```powershell
+indextts2 check --model-dir D:/models/IndexTTS-2 --device cuda:0
+indextts2 synth --text "你好，这是 Windows 本地语音。" --voice D:/refs/test.wav --model-dir D:/models/IndexTTS-2 --device cuda:0 --fp16 --output D:/output/test.wav
+```
+
+Close the Breeze Vulkan server before invoking IndexTTS or Qwen. VoiceHub checks whether Breeze is still alive, and IndexTTS refuses to start if it can see fewer than 5GB of free video memory. NVIDIA `nvidia-smi` can confirm remaining VRAM. The 5GB threshold is a precaution, **not a guaranteed minimum requirement**.
+
 ## Development caveats
 
-- IndexTTS and Confucius4 are deliberately disabled in Windows UI until compatible adapters and testing exist.
+- IndexTTS has an experimental subprocess adapter but needs Windows hardware verification; Confucius4 remains disabled.
 - Breeze server remains resident while VoiceHub is open; **this preview does not yet implement strict one-model-at-a-time unload across every backend**. Shut it down before heavy Qwen work if needed.
 - The Gradio dashboard is locally served, and Qwen runs as a subprocess. No user audio or model weights should be committed to Git.
 - Read each upstream model license, including non-commercial restrictions for self-hosted Breeze, before distributing outputs commercially.
