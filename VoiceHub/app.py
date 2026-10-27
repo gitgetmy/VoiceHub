@@ -49,6 +49,12 @@ def _merge_wav_segments(paths, dest):
     merged = np.concatenate(blocks, axis=0)
     sf.write(str(dest), merged, expected_rate, subtype="PCM_16")
 
+def _continuous_breeze_text(text):
+    """Treat newlines as formatting, not independent voice-generation prompts."""
+    import re
+    # Keep authored punctuation and word boundaries across Chinese/English lines.
+    return re.sub(r"\\s+", " ", text.strip())
+
 def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transcript, emotion, alpha, breeze_mode):
     if not (text or "").strip(): return None, "请输入配音文本。"
     if not LOCK.acquire(blocking=False): return None, "有其他推理任务正在执行。"
@@ -57,7 +63,7 @@ def synthesize(engine, text, instruction, cfg, breeze_audio, index_audio, transc
         if engine == "Breeze TTS 2 · BF16":
             if not (BREEZE/"config.json").is_file(): return None, f"缺少模型配置：{BREEZE}"
             args = [MLX_PY,"-m","mlx_audio.tts.generate","--model",BREEZE,
-                    "--text",text,"--output_path",OUT,"--file_prefix",wav.stem,
+                    "--text",_continuous_breeze_text(text),"--output_path",OUT,"--file_prefix",wav.stem,
                     "--cfg_scale",str(cfg)]
             cloning = breeze_mode != "声音设计"
             if cloning and not breeze_audio:
