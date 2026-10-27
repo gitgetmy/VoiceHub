@@ -78,9 +78,7 @@ uv sync --python 3.11
 cd ../../..
 ```
 
-The location of `indextts2.exe` depends on where the environment is installed. If `uv sync` creates `windows/engines/index-tts/.venv`, the VoiceHub preview currently expects you to install/copy the executable environment to `windows/.venv-index` or adjust the path constant `INDEX_CLI` in `windows/app.py`. Do not copy only the CLI executable without its dependencies.
-
-Download required **official PyTorch** IndexTTS2 model resources, not the MLX weights, including `config.yaml`, `gpt.pth`, `s2mel.pth`, and auxiliary files. Set `VOICEHUB_INDEX_MODEL` to that model-resource directory. Upstream CLI includes `indextts2 init`, `download`, and `check`.
+After `uv sync`, the preview locates the CLI in `windows/engines/index-tts/.venv/Scripts/indextts2.exe`. Keep its entire virtual environment intact.\n\nDownload required **official PyTorch** IndexTTS2 model resources, not the MLX weights, including `config.yaml`, `gpt.pth`, `s2mel.pth`, and auxiliary files. Set `VOICEHUB_INDEX_MODEL` to that model-resource directory. Upstream CLI includes `indextts2 init`, `download`, and `check`.
 
 Before first VoiceHub launch, validate the CLI itself:
 ```powershell
