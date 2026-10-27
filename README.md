@@ -112,3 +112,8 @@ Open <http://127.0.0.1:7860>. Set another port using `VOICEHUB_PORT=7861 python 
 ## License
 
 The VoiceHub orchestration/UI source is provided under MIT. The MLX-Audio, IndexTTS, Confucius4, Qwen3-ASR projects and model weights are independent third-party works under their respective terms.
+## Breeze voice cloning and reference transcription
+
+The Breeze panel now offers **Voice Design**, **Voice Clone**, and **Voice Clone + Direction**. Enter the target speech under **合成文本（中文 / English）**. In either clone mode, upload a licensed reference recording, select Confucius4-R2T2 or Qwen3-ASR, click **自动识别参考文本**, and review/correct the transcription before generating. The reference transcription describes what is spoken in the uploaded audio; it is **not** the new output text. Automatic reference transcription uses a local ASR subprocess and requires installed ASR weights. English synthesis is supported by Breeze; cross-language cloning results vary.
+
+For IndexTTS, ensure W2V-BERT and CAMPPlus are cached before offline inference (`HF_HUB_OFFLINE=1` in its subprocess). Only one inference task is allowed at a time.
